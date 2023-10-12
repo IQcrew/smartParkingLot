@@ -1,0 +1,8 @@
+FIREBASE:
+meno: sadlakpeter83@gmail.com	
+heslo: nematurujem123HAHA
+
+
+wifi:
+meno: cloud
+heslo: connected123

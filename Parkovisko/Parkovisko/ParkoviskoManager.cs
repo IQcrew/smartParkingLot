@@ -21,7 +21,6 @@ namespace Parkovisko
         List<Panel> allPanels;
         List<PictureBox> parkovacieMiesta;
         public List<string> menaZamestnancov;
-        string[] response;
         string LastID = "";
         System.Diagnostics.Stopwatch watch;
         bool wait = false;
@@ -59,90 +58,120 @@ namespace Parkovisko
         {
             label3.Text = "Aktuálny čas: " + DateTime.Now.ToString();
             if (LeftMouseButton) { this.Location = new Point(BarCoords.X - (CursorCoords.X - Cursor.Position.X), BarCoords.Y - (CursorCoords.Y - Cursor.Position.Y)); }
-            komunikaciaESP();
+            
 
         }
 
         private void komunikaciaESP()
         {
-            databaseManager.refreshParkovisko();
-
-            try
+            while (true)
             {
-                for (int i = 0; i < parkovacieMiesta.Count; i++)
-                {
-                    parkovacieMiesta[i].BackColor = databaseManager.miesta[i] == 'y' ? Color.Red : Color.Green;
-                }
-            }
-            catch { }
+                databaseManager.refreshParkovisko();
 
-            if (setCard && databaseManager.karta != "           ")
-            {
-                setCard = false;
-                label4.Visible = false;
-                if (rozpoznavanie)
+                try
                 {
-                    string tempVypis = "je voľná";
-                    rozpoznavanie = false;
-                    foreach (var item in databaseManager.zamestnanci)
+                    for (int i = 0; i < parkovacieMiesta.Count; i++)
                     {
-                        if (item.cardID == databaseManager.karta) { tempVypis = "patri " + item.Meno; }
+                        parkovacieMiesta[i].BackColor = databaseManager.miesta[i] == 'y' ? Color.Red : Color.Green;
                     }
-                    MessageBox.Show("Karta (" + databaseManager.karta + ")  " + tempVypis);
+                }
+                catch { }
+
+                if (setCard && databaseManager.karta != "           ")
+                {
+                    setCard = false;
+                    UpdateLabel4Visibility(false);
+                    if (rozpoznavanie)
+                    {
+                        string tempVypis = "je voľná";
+                        rozpoznavanie = false;
+                        foreach (var item in databaseManager.zamestnanci)
+                        {
+                            if (item.cardID == databaseManager.karta) { tempVypis = "patri " + item.Meno; }
+                        }
+                        MessageBox.Show("Karta (" + databaseManager.karta + ")  " + tempVypis);
+                    }
+                    else
+                    {
+                        if (databaseManager.validID(databaseManager.karta))
+                        {
+                            MessageBox.Show("Karta je už priradena k inému uzivatelovi !!!");
+                        }
+                        else
+                        {
+                            selectedZamestnanec.cardID = databaseManager.karta;
+                            databaseManager.updateZamestnanca(selectedZamestnanec);
+                            MessageBox.Show("Karta z ID:  " + databaseManager.karta + "  bola nastavena pre " + selectedZamestnanec.Meno);
+                        }
+                    }
+
+                    wait = true;
+                    watch.Restart();
+                }
+                else if (wait)
+                {
+                    if (watch.ElapsedMilliseconds > 5000)
+                    {
+                        watch.Restart(); watch.Stop();
+                        wait = false;
+                        if (manualneOtvorenie) { zmenitStavZavory(false); manualneOtvorenie = false; }
+                    }
+
                 }
                 else
                 {
-                    if (databaseManager.validID(databaseManager.karta))
+                    if (databaseManager.karta != LastID && databaseManager.karta != "           ")
                     {
-                        MessageBox.Show("Karta je už priradena k inému uzivatelovi !!!");
-                    }
-                    else
-                    {
-                        selectedZamestnanec.cardID = databaseManager.karta;
-                        databaseManager.updateZamestnanca(selectedZamestnanec);
-                        MessageBox.Show("Karta z ID:  " + databaseManager.karta + "  bola nastavena pre " + selectedZamestnanec.Meno);
-                    }
-                }
-                
-                wait = true;
-                watch.Restart();
-            }
-            else if (wait)
-            {
-                if (watch.ElapsedMilliseconds > 5000)
-                {
-                    watch.Restart(); watch.Stop();
-                    wait = false;
-                    if (manualneOtvorenie) { zmenitStavZavory(false); manualneOtvorenie = false; }
-                }
 
+                        selectedZamestnanec = databaseManager.findZamestnanecByID(databaseManager.karta);
+                        wait = true;
+                        watch.Restart();
+                        if (!databaseManager.validID(databaseManager.karta))
+                        {
+                            databaseManager.changeZavora("w");
+
+                        }
+                        else
+                        {
+                            zmenitStavZavory(true);
+                            prechodZamestnanca();
+                        }
+                    }
+                    LastID = databaseManager.karta;
+                }
+            }
+        }
+        private void UpdateLabel4Visibility(bool isVisible)
+        {
+            if (label4.InvokeRequired)
+            {
+                // If called from a different thread, use Invoke to update the UI control
+                label4.Invoke(new Action(() => label4.Visible = isVisible));
             }
             else
             {
-                if (databaseManager.karta != LastID && databaseManager.karta != "           ")
-                {
-
-                    selectedZamestnanec = databaseManager.findZamestnanecByID(databaseManager.karta);
-                    wait = true;
-                    watch.Restart();
-                    if (!databaseManager.validID(databaseManager.karta))
-                    {
-                        UdpClient udpClient = new UdpClient();
-                        udpClient.Connect(IpOfClient, Convert.ToInt16(8080));
-                        Byte[] senddata = Encoding.ASCII.GetBytes("w");
-                        udpClient.Send(senddata, senddata.Length);
-
-                    }
-                    else
-                    {
-                        zmenitStavZavory(true);
-                        prechodZamestnanca();
-                    }
-                }
-                LastID = databaseManager.karta;
+                // If called from the UI thread, update the UI control directly
+                label4.Visible = isVisible;
             }
         }
 
+        private void UpdateSelectedLabelText(string newText)
+        {
+            if (InvokeRequired)
+            {
+                // If called from a different thread, use Invoke to update the UI control
+                Invoke(new Action(() =>
+                {
+                    // Update the label's text property
+                    (allPanels[menaZamestnancov.IndexOf(selectedZamestnanec.Meno)].Controls[3] as Label).Text = newText;
+                }));
+            }
+            else
+            {
+                // If called from the UI thread, update the UI control directly
+                (allPanels[menaZamestnancov.IndexOf(selectedZamestnanec.Meno)].Controls[3] as Label).Text = newText;
+            }
+        }
         private void setCard_Click(object sender, EventArgs e)
         {
             selectedZamestnanec = databaseManager.findZamestnanec(menaZamestnancov[allPanels.IndexOf((sender as Button).Parent as Panel)]);
@@ -151,16 +180,12 @@ namespace Parkovisko
             wait = true;
             watch.Restart();
             watch.Stop();
-            komunikaciaESP();
         }
 
 
         private void zmenitStavZavory(bool hodnota)
         {
-            UdpClient udpClient = new UdpClient();
-            udpClient.Connect(IpOfClient, Convert.ToInt16(8080));
-            Byte[] senddata = Encoding.ASCII.GetBytes(hodnota ? "y" : "n");
-            udpClient.Send(senddata, senddata.Length);
+            databaseManager.changeZavora(hodnota ? "y" : "n");
         }
         private void prechodZamestnanca()
         {
@@ -179,7 +204,7 @@ namespace Parkovisko
                 (allPanels[menaZamestnancov.IndexOf(selectedZamestnanec.Meno)].Controls[4] as PictureBox).BackColor = Color.Red;
             }
             databaseManager.updateZamestnanca(selectedZamestnanec);
-            (allPanels[menaZamestnancov.IndexOf(selectedZamestnanec.Meno)].Controls[3] as Label).Text = "Prichod: " + selectedZamestnanec.Prichod;
+            UpdateSelectedLabelText("Prichod: " + selectedZamestnanec.Prichod);
         }
         private void vypisatHistoriu_Click(object sender, EventArgs e)
         {
@@ -215,7 +240,6 @@ namespace Parkovisko
             wait = true;
             watch.Restart();
             watch.Stop();
-            komunikaciaESP();
         }
 
         // WINDOW DESINGN
@@ -246,7 +270,7 @@ namespace Parkovisko
 
         private void minimizeButton_MouseLeave(object sender, EventArgs e)
         {
-            minimizeButton.BackColor = Color.FromArgb(255, 39, 163, 188);
+            minimizeButton.BackColor = Color.FromArgb(255, 187, 197, 170);
         }
 
         private void minimizeButton_Click(object sender, EventArgs e)
@@ -263,7 +287,7 @@ namespace Parkovisko
 
         private void exitButton_MouseLeave(object sender, EventArgs e)
         {
-            exitButton.BackColor = Color.FromArgb(255, 39, 163, 188);
+            exitButton.BackColor = Color.FromArgb(255, 187, 197, 170);
         }
 
         private void exitButton_Click(object sender, EventArgs e)
